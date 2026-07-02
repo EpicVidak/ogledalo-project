@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LED Color Control</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background-color: #363636;
+        color: #fff;
+      }
+      .container {
+        text-align: center;
+        border: 1px solid #ccc;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      .container input {
+        margin: 0 10px;
+        width: 50px;
+        height: 50px;
+        text-align: center;
+      }
+      .container button {
+        margin-top: 10px;
+        padding: 10px 20px;
+        cursor: pointer;
+      }
+      .item-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 10px 0;
+      }
+      .item-wrap input[type="radio"] {
+        display: none; /* Hide the default radio button */
+      }
+      .item-wrap label {
+        padding: 5px 10px;
+        border-radius: 5px;
+        cursor: pointer;
+        background-color: transparent; /* Fully transparent by default */
+        transition: background-color 0.3s;
+      }
+      .item-wrap input[type="radio"]:checked + label {
+        background-color: rgba(0, 0, 255, 0.5); /* Semi-transparent blue when selected */
+      }
+      .input[type="number"] {
+        width: 40px;
+        height: 48px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Set LED Color</h2>
+      <div id="colorForm">
+        <div class="color-picker">
+          <div class="item-wrap">
+            <input type="color" id="colorPicker" name="color" required />
+          </div>
+          <!-- input radio -->
+          <div class="item-wrap">
+            <input type="radio" id="mode1" name="mode" value="solid" />
+            <label for="mode1">Solid</label>
+          </div>
+          <div class="item-wrap">
+            <input type="radio" id="mode2" name="mode" value="pixelrun" />
+            <label for="mode2">PixelRun</label>
+          </div>
+          <div id="sliderContainer"> <!-- Initially hidden -->
+            <input type="range" id="delayPicker" min="1" max="100" value="50" />
+            <label for="delayPicker">Delay: <span id="delayValue">50</span> ms</label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Retrieve the last selected mode, color, and delay from local storage on page load
+      window.onload = function () {
+        const lastMode = localStorage.getItem("selectedMode");
+        const lastColor = localStorage.getItem("currentColor");
+        const lastDelay = localStorage.getItem("currentDelay");
+
+        if (lastMode) {
+          const radioButton = document.getElementById(lastMode);
+          if (radioButton) {
+            radioButton.checked = true; // Set the radio button as checked
+          }
+        }
+
+        if (lastColor) {
+          document.getElementById("colorPicker").value = lastColor; // Set the color picker value
+        }
+
+        if (lastDelay) {
+          document.getElementById("delayPicker").value = lastDelay; // Set the delay picker value
+          document.getElementById("delayValue").innerText = lastDelay; // Update the displayed delay value
+        }
+
+        initializeSliderOpacity(); // Initialize slider opacity based on selected mode
+      };
+
+      // Function to initialize the slider opacity based on the selected mode
+      function initializeSliderOpacity() {
+        const pixelRunRadio = document.getElementById("mode2");
+        const sliderContainer = document.getElementById("sliderContainer");
+        sliderContainer.style.opacity = pixelRunRadio.checked ? "1" : "0.1"; // Set opacity based on selection
+      }
+
+      // Function to save the selected mode to local storage
+      function saveSelectedMode() {
+        const mode = document.querySelector('input[name="mode"]:checked').id;
+        localStorage.setItem("selectedMode", mode); // Save the selected mode to local storage
+      }
+
+      // Function to save the current color to local storage
+      function saveCurrentColor() {
+        const color = document.getElementById("colorPicker").value;
+        localStorage.setItem("currentColor", color); // Save the current color to local storage
+      }
+
+      // Function to save the current delay to local storage
+      function saveCurrentDelay() {
+        const delay = document.getElementById("delayPicker").value;
+        localStorage.setItem("currentDelay", delay); // Save the current delay to local storage
+      }
+
+      // Function to toggle the visibility of the slider
+      function toggleSlider() {
+        const pixelRunRadio = document.getElementById("mode2");
+        const sliderContainer = document.getElementById("sliderContainer");
+        sliderContainer.style.opacity = pixelRunRadio.checked ? "1" : "0.1"; // Set opacity based on selection
+      }
+
+      // Throttle function to limit the rate of function calls
+      function throttle(func, limit) {
+        let lastFunc;
+        let lastRan;
+
+        return function() {
+          const context = this;
+          const args = arguments;
+          if (!lastRan) {
+            func.apply(context, args);
+            lastRan = Date.now();
+          } else {
+            clearTimeout(lastFunc);
+            lastFunc = setTimeout(function() {
+              if ((Date.now() - lastRan) >= limit) {
+                func.apply(context, args);
+                lastRan = Date.now();
+              }
+            }, limit - (Date.now() - lastRan));
+          }
+        };
+      }
+
+      // Function to apply the color change
+      const applyColorChange = throttle(function() {
+        const hexColor = document.getElementById("colorPicker").value;
+        const delay = document.getElementById("delayPicker").value || 50;
+        // Convert hex color to RGB
+        const red = parseInt(hexColor.substr(1, 2), 16);
+        const green = parseInt(hexColor.substr(3, 2), 16);
+        const blue = parseInt(hexColor.substr(5, 2), 16);
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+
+        // Save the selected mode, current color, and current delay to local storage
+        saveSelectedMode();
+        saveCurrentColor();
+        saveCurrentDelay();
+
+        // Send the color change request
+        fetch("/set-color", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ red, green, blue, delay, mode }),
+        })
+        .then(response => response.text())
+        .then(status => {
+          // Handle response if needed
+        });
+      }, 20); // Throttle to 20ms
+
+      // Add event listener to radio buttons to save selection to local storage
+      const radioButtons = document.querySelectorAll('input[name="mode"]');
+      radioButtons.forEach((radio) => {
+        radio.addEventListener("change", function () {
+          saveSelectedMode();
+          toggleSlider(); // Show/hide slider based on selection
+          applyColorChange(); // Apply color change on radio selection
+        });
+      });
+
+      // Add event listener to color input to trigger changes
+      document.getElementById("colorPicker").addEventListener("input", function () {
+        saveCurrentColor(); // Save current color on color change
+        applyColorChange(); // Apply color change on color input
+      });
+
+      // Add event listener to delay input to trigger changes
+      document.getElementById("delayPicker").addEventListener("input", function () {
+        document.getElementById("delayValue").innerText = this.value; // Update displayed delay value
+        saveCurrentDelay(); // Save current delay on slider change
+        applyColorChange(); // Apply color change on delay input
+      });
+    </script>
+  </body>
+</html>
